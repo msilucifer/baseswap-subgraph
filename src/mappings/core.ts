@@ -3,13 +3,13 @@ import { BigInt, BigDecimal, store } from '@graphprotocol/graph-ts'
 import {
   Pair,
   Token,
-  UniswapFactory,
+  BaseswapFactory,
   Transaction,
   Swap as SwapEvent,
   Bundle
 } from '../types/schema'
 import { Swap, Transfer, Sync } from '../types/templates/Pair/Pair'
-import { updatePairDayData, updateTokenDayData, updateUniswapDayData, updatePairHourData } from './dayUpdates'
+import { updatePairDayData, updateTokenDayData, updateBaseswapDayData, updatePairHourData } from './dayUpdates'
 import { getEthPriceInUSD, findEthPerToken, getTrackedVolumeUSD, getTrackedLiquidityUSD } from './pricing'
 import {
   convertTokenToDecimal,
@@ -43,10 +43,10 @@ export function handleSync(event: Sync): void {
   let pair = Pair.load(event.address.toHex())
   let token0 = Token.load(pair.token0)
   let token1 = Token.load(pair.token1)
-  let uniswap = UniswapFactory.load(FACTORY_ADDRESS)
+  let baseswap = BaseswapFactory.load(FACTORY_ADDRESS)
 
   // reset factory liquidity by subtracting onluy tarcked liquidity
-  uniswap.totalLiquidityETH = uniswap.totalLiquidityETH.minus(pair.trackedReserveETH as BigDecimal)
+  baseswap.totalLiquidityETH = baseswap.totalLiquidityETH.minus(pair.trackedReserveETH as BigDecimal)
 
   // reset token total liquidity amounts
   token0.totalLiquidity = token0.totalLiquidity.minus(pair.reserve0)
@@ -90,8 +90,8 @@ export function handleSync(event: Sync): void {
   pair.reserveUSD = pair.reserveETH.times(bundle.ethPrice)
 
   // use tracked amounts globally
-  uniswap.totalLiquidityETH = uniswap.totalLiquidityETH.plus(trackedLiquidityETH)
-  uniswap.totalLiquidityUSD = uniswap.totalLiquidityETH.times(bundle.ethPrice)
+  baseswap.totalLiquidityETH = baseswap.totalLiquidityETH.plus(trackedLiquidityETH)
+  baseswap.totalLiquidityUSD = baseswap.totalLiquidityETH.times(bundle.ethPrice)
 
   // now correctly set liquidity amounts for each token
   token0.totalLiquidity = token0.totalLiquidity.plus(pair.reserve0)
@@ -99,7 +99,7 @@ export function handleSync(event: Sync): void {
 
   // save entities
   pair.save()
-  uniswap.save()
+  baseswap.save()
   token0.save()
   token1.save()
 }
@@ -160,17 +160,17 @@ export function handleSwap(event: Swap): void {
   pair.save()
 
   // update global values, only used tracked amounts for volume
-  let uniswap = UniswapFactory.load(FACTORY_ADDRESS)
-  uniswap.totalVolumeUSD = uniswap.totalVolumeUSD.plus(trackedAmountUSD)
-  uniswap.totalVolumeETH = uniswap.totalVolumeETH.plus(trackedAmountETH)
-  uniswap.untrackedVolumeUSD = uniswap.untrackedVolumeUSD.plus(derivedAmountUSD)
-  uniswap.txCount = uniswap.txCount.plus(ONE_BI)
+  let baseswap = BaseswapFactory.load(FACTORY_ADDRESS)
+  baseswap.totalVolumeUSD = baseswap.totalVolumeUSD.plus(trackedAmountUSD)
+  baseswap.totalVolumeETH = baseswap.totalVolumeETH.plus(trackedAmountETH)
+  baseswap.untrackedVolumeUSD = baseswap.untrackedVolumeUSD.plus(derivedAmountUSD)
+  baseswap.txCount = baseswap.txCount.plus(ONE_BI)
 
   // save entities
   pair.save()
   token0.save()
   token1.save()
-  uniswap.save()
+  baseswap.save()
 
   let transaction = Transaction.load(event.transaction.hash.toHexString())
   if (transaction === null) {
@@ -217,15 +217,15 @@ export function handleSwap(event: Swap): void {
   // update day entities
   let pairDayData = updatePairDayData(event)
   let pairHourData = updatePairHourData(event)
-  let uniswapDayData = updateUniswapDayData(event)
+  let baseswapDayData = updateBaseswapDayData(event)
   let token0DayData = updateTokenDayData(token0 as Token, event)
   let token1DayData = updateTokenDayData(token1 as Token, event)
 
   // swap specific updating
-  uniswapDayData.dailyVolumeUSD = uniswapDayData.dailyVolumeUSD.plus(trackedAmountUSD)
-  uniswapDayData.dailyVolumeETH = uniswapDayData.dailyVolumeETH.plus(trackedAmountETH)
-  uniswapDayData.dailyVolumeUntracked = uniswapDayData.dailyVolumeUntracked.plus(derivedAmountUSD)
-  uniswapDayData.save()
+  baseswapDayData.dailyVolumeUSD = baseswapDayData.dailyVolumeUSD.plus(trackedAmountUSD)
+  baseswapDayData.dailyVolumeETH = baseswapDayData.dailyVolumeETH.plus(trackedAmountETH)
+  baseswapDayData.dailyVolumeUntracked = baseswapDayData.dailyVolumeUntracked.plus(derivedAmountUSD)
+  baseswapDayData.save()
 
   // swap specific updating for pair
   pairDayData.dailyVolumeToken0 = pairDayData.dailyVolumeToken0.plus(amount0Total)
